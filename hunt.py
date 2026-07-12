@@ -2,7 +2,7 @@ from collections import Counter, defaultdict
 import re
 
 # Step 1: Open and read the network traffic log
-with open("network_traffic.log", "r") as log_file:
+with open("evidence/network_traffic.log", "r") as log_file:
     lines = log_file.readlines()
 
 # Step 2: Parse each line into timestamp, source IP, and destination IP:port

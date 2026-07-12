@@ -1,10 +1,10 @@
 from datetime import datetime
 
 # Step 1: Read events from both log files
-with open("auth_events.log", "r") as auth_file:
+with open("evidence/auth_events.log", "r") as auth_file:
     auth_events = auth_file.readlines()
 
-with open("file_events.log", "r") as file_file:
+with open("evidence/file_events.log", "r") as file_file:
     file_events = file_file.readlines()
 
 # Step 2: Merge all events into one list
