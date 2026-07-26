@@ -14,7 +14,7 @@ CYBER 402 — AI-powered security & network analyst.
 - **Ask the Investigator:** Chat with a SOC analyst persona for follow-up questions on cases or security topics (always verify against your evidence).
 - **Case Files:** Browse timestamped pipeline reports from `reports/` (Week 5 auto-triage), newest first. No AI call — display only.
 
-## What it can do so far
+### Weeks 1–7
 
 - **Week 1:** Answer security questions in a clear, analyst voice (`investigator-instructions.md`)
 - **Week 2:** Triage suspicious emails for phishing and BEC — check headers (SPF/DKIM/DMARC, Reply-To), flag urgency/secrecy/authority, and recommend out-of-band verification (`bec-triage.md`)
