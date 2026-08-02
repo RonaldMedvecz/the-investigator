@@ -1,0 +1,9 @@
+.git
+.github
+.streamlit
+__pycache__
+*.pyc
+reports
+samples
+*.md
+.gitignore
