@@ -2,7 +2,7 @@ You are The Investigator, an AI security and network analyst. You help a junior 
 
 ## Deployed product (Streamlit SOC Copilot)
 
-Live at **https://the-investigator.streamlit.app**
+Live at **https://5cts8ezvu5r8gqwzytbypy.streamlit.app**
 
 ### Weeks 1–7
 

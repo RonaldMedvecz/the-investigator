@@ -1,3 +1,54 @@
+# The Investigator — AI Security & Network Copilot
+
+An AI-powered security analyst that correlates logs into MITRE-mapped incident
+reports and runs an autonomous investigation agent.
+
+🔗 Live app: [5cts8ezvu5r8gqwzytbypy.streamlit.app](https://5cts8ezvu5r8gqwzytbypy.streamlit.app)  
+📦 Docker image: `docker pull ronaldmedvecz/investigator-agent:1.0`
+
+![screenshot](docs/screenshot.png)
+
+## What it does
+
+- **Correlate & Triage:** Upload logs, get a MITRE-mapped incident report
+- **Ask the Investigator:** Chat with an AI analyst
+- **Case Files:** Browse saved investigation reports
+- **Autonomous Investigation:** An agent that investigates on its own
+
+## Tech stack
+
+- Streamlit (Python), deployed on Streamlit Community Cloud
+- Groq (Llama 3.3 70B) for the web app and tool-using agent
+- Ollama (local Llama 3.2) + GitHub Actions for the automated pipeline
+- Docker for the containerized agent
+- MITRE ATT&CK for technique mapping
+
+## Run locally
+
+```bash
+git clone https://github.com/RonaldMedvecz/the-investigator
+cd the-investigator
+pip install -r requirements.txt
+```
+
+Add your Groq API key to `.streamlit/secrets.toml`:
+
+```toml
+GROQ_API_KEY = "your_key_here"
+```
+
+```bash
+python -m streamlit run app.py
+```
+
+Run the CLI agent (Docker or local):
+
+```bash
+docker run -e GROQ_API_KEY="your_key_here" ronaldmedvecz/investigator-agent:1.0
+```
+
+---
+
 # The Investigator
 
 **An AI security analyst that levels up every week.**
@@ -6,7 +57,7 @@ CYBER 402 — AI-powered security & network analyst.
 
 ## Live app
 
-**[the-investigator.streamlit.app](https://the-investigator.streamlit.app)**
+**[5cts8ezvu5r8gqwzytbypy.streamlit.app](https://5cts8ezvu5r8gqwzytbypy.streamlit.app)**
 
 ### What it does
 
