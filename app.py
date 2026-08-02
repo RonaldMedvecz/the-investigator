@@ -175,4 +175,7 @@ with tab4:
                     api_key=api_key,
                     on_step=st.write,
                 )
-            st.markdown(verdict)
+            if verdict.startswith("⚠️"):
+                st.error(verdict)
+            else:
+                st.markdown(verdict)

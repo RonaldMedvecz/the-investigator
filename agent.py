@@ -8,13 +8,14 @@ import json
 import os
 from pathlib import Path
 
-from groq import Groq
+from groq import BadRequestError, Groq
 from rich.console import Console
 from rich.panel import Panel
 
 EVIDENCE_DIR = Path("evidence")
 MODEL = "llama-3.3-70b-versatile"
 MAX_STEPS = 10
+MAX_TOOL_CONTENT_CHARS = 12_000
 
 console = Console()
 
@@ -79,7 +80,11 @@ TOOLS = [
         "function": {
             "name": "list_evidence",
             "description": "List all log filenames in the evidence/ folder.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
         },
     },
     {
@@ -96,6 +101,7 @@ TOOLS = [
                     }
                 },
                 "required": ["filename"],
+                "additionalProperties": False,
             },
         },
     },
@@ -113,6 +119,7 @@ TOOLS = [
                     }
                 },
                 "required": ["technique_id"],
+                "additionalProperties": False,
             },
         },
     },
@@ -138,6 +145,53 @@ DEFAULT_GOAL = """Investigate the security incident using the logs in evidence/.
 Identify initial access, key IoCs, MITRE techniques, and recommend response steps."""
 
 
+def _parse_tool_arguments(raw):
+    if not raw or raw == "null":
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _assistant_message(msg):
+    """Serialize assistant turn for Groq API (plain dict, not SDK object)."""
+    entry = {"role": "assistant", "content": msg.content or ""}
+    if msg.tool_calls:
+        entry["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments or "{}",
+                },
+            }
+            for tc in msg.tool_calls
+        ]
+    return entry
+
+
+def _tool_content(result):
+    text = str(result)
+    if len(text) <= MAX_TOOL_CONTENT_CHARS:
+        return text
+    return text[:MAX_TOOL_CONTENT_CHARS] + "\n...[truncated for model context]..."
+
+
+def _groq_error_message(exc):
+    detail = str(exc)
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error", {})
+        if err.get("message"):
+            detail = err["message"]
+        if err.get("failed_generation"):
+            detail += f"\n\nFailed generation: {err['failed_generation']}"
+    return f"⚠️ Groq request failed: {detail}"
+
+
 def run_agent(goal=None, api_key=None, on_step=None):
     """Run the agent loop. Returns final verdict string."""
     goal = goal or DEFAULT_GOAL
@@ -149,24 +203,36 @@ def run_agent(goal=None, api_key=None, on_step=None):
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": goal}]
 
     for step in range(MAX_STEPS):
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            tools=TOOLS,
-            tool_choice="auto",
-        )
+        try:
+            resp = client.chat.completions.create(
+                model=MODEL,
+                messages=messages,
+                tools=TOOLS,
+                tool_choice="auto",
+            )
+        except BadRequestError as exc:
+            return _groq_error_message(exc)
+
         msg = resp.choices[0].message
-        messages.append(msg)
+        messages.append(_assistant_message(msg))
 
         if not msg.tool_calls:
             return msg.content or ""
 
         for tc in msg.tool_calls:
-            args = json.loads(tc.function.arguments or "{}") or {}
+            args = _parse_tool_arguments(tc.function.arguments)
             if on_step:
                 on_step(f"**Step {step + 1}:** `{tc.function.name}({args})`")
-            result = AVAILABLE[tc.function.name](**args)
-            preview = str(result)
+            fn = AVAILABLE.get(tc.function.name)
+            if fn is None:
+                result = f"Error: unknown tool '{tc.function.name}'"
+            else:
+                try:
+                    result = fn(**args)
+                except TypeError as exc:
+                    result = f"Error: invalid arguments for {tc.function.name}: {exc}"
+            content = _tool_content(result)
+            preview = content
             if len(preview) > 500:
                 preview = preview[:500] + "..."
             if on_step:
@@ -175,8 +241,7 @@ def run_agent(goal=None, api_key=None, on_step=None):
                 {
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "name": tc.function.name,
-                    "content": str(result),
+                    "content": content,
                 }
             )
 
