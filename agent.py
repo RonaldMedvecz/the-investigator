@@ -11,7 +11,6 @@ from pathlib import Path
 from groq import Groq
 from rich.console import Console
 from rich.panel import Panel
-from rich.tree import Tree
 
 EVIDENCE_DIR = Path("evidence")
 MODEL = "llama-3.3-70b-versatile"
@@ -135,60 +134,63 @@ When you have enough evidence, stop calling tools and deliver a final verdict:
 
 Cite log evidence. Do not invent events or technique IDs not supported by the logs."""
 
-
-GOAL = """Investigate the security incident using the logs in evidence/.
+DEFAULT_GOAL = """Investigate the security incident using the logs in evidence/.
 Identify initial access, key IoCs, MITRE techniques, and recommend response steps."""
 
 
-def run_agent():
-    api_key = os.environ.get("GROQ_API_KEY")
+def run_agent(goal=None, api_key=None, on_step=None):
+    """Run the agent loop. Returns final verdict string."""
+    goal = goal or DEFAULT_GOAL
+    api_key = api_key or os.environ.get("GROQ_API_KEY")
     if not api_key:
-        console.print("[red]Set GROQ_API_KEY first.[/red]")
-        console.print('PowerShell: $env:GROQ_API_KEY="your_key_here"')
-        return
+        return "⚠️ No GROQ_API_KEY found. Set it in the environment or Streamlit secrets."
 
     client = Groq(api_key=api_key)
-    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": GOAL}]
-    tree = Tree("[bold cyan]Agent reasoning trail[/bold cyan]")
+    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": goal}]
 
-    with console.status("[bold green]Investigator thinking..."):
-        for step in range(MAX_STEPS):
-            resp = client.chat.completions.create(
-                model=MODEL,
-                messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
+    for step in range(MAX_STEPS):
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            tools=TOOLS,
+            tool_choice="auto",
+        )
+        msg = resp.choices[0].message
+        messages.append(msg)
+
+        if not msg.tool_calls:
+            return msg.content or ""
+
+        for tc in msg.tool_calls:
+            args = json.loads(tc.function.arguments or "{}") or {}
+            if on_step:
+                on_step(f"**Step {step + 1}:** `{tc.function.name}({args})`")
+            result = AVAILABLE[tc.function.name](**args)
+            preview = str(result)
+            if len(preview) > 500:
+                preview = preview[:500] + "..."
+            if on_step:
+                on_step(preview)
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "name": tc.function.name,
+                    "content": str(result),
+                }
             )
-            msg = resp.choices[0].message
-            messages.append(msg)
 
-            if not msg.tool_calls:
-                console.print(tree)
-                console.print(
-                    Panel(msg.content or "", title="[bold green]Verdict[/bold green]", border_style="green")
-                )
-                return
-
-            for tc in msg.tool_calls:
-                args = json.loads(tc.function.arguments or "{}") or {}
-                branch = tree.add(f"[yellow]Step {step + 1}[/yellow] {tc.function.name}({args})")
-                result = AVAILABLE[tc.function.name](**args)
-                preview = str(result)
-                if len(preview) > 200:
-                    preview = preview[:200] + "..."
-                branch.add(f"[dim]{preview}[/dim]")
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "name": tc.function.name,
-                        "content": str(result),
-                    }
-                )
-
-    console.print(tree)
-    console.print("[red]Max steps reached without a final verdict.[/red]")
+    return "Max steps reached without a final verdict."
 
 
 if __name__ == "__main__":
-    run_agent()
+    key = os.environ.get("GROQ_API_KEY")
+    if not key:
+        console.print("[red]Set GROQ_API_KEY first.[/red]")
+        console.print('PowerShell: $env:GROQ_API_KEY="your_key_here"')
+    else:
+        verdict = run_agent(
+            api_key=key,
+            on_step=lambda text: console.print(f"[cyan]{text}[/cyan]"),
+        )
+        console.print(Panel(verdict, title="Verdict", border_style="green"))

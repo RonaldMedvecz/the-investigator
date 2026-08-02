@@ -1,10 +1,7 @@
 """
-The Investigator — SOC Copilot (Week 6 + 7)
-A Streamlit app that correlates multiple log sources into one verdict using a
-hosted LLM (Groq / Llama 3.3 70B), and displays pipeline reports from reports/.
-
-You don't have to WRITE this app — but a tool you can't explain is a tool you
-can't trust, so read it. The pieces worth understanding are marked  #->
+The Investigator — SOC Copilot (Week 6–8)
+A Streamlit app that correlates logs, chats with a SOC analyst, browses pipeline
+reports, and runs an autonomous tool-using agent against evidence/.
 """
 
 import os
@@ -12,6 +9,8 @@ from datetime import datetime
 
 import streamlit as st
 from groq import Groq
+
+from agent import run_agent
 
 REPORTS_DIR = "reports"
 
@@ -58,7 +57,12 @@ def ask_groq(messages):
 st.set_page_config(page_title="The Investigator — SOC Copilot", page_icon="🕵️")
 st.title("🕵️ The Investigator — SOC Copilot")
 
-tab1, tab2, tab3 = st.tabs(["Correlate & Triage", "Ask the Investigator", "Case Files"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Correlate & Triage",
+    "Ask the Investigator",
+    "Case Files",
+    "Autonomous Investigation",
+])
 
 # ---------------------------------------------------------------------------
 # TAB 1 — Correlate & Triage
@@ -151,3 +155,24 @@ with tab3:
         choice = st.selectbox("Pick a case file", md_files)
         with open(os.path.join(REPORTS_DIR, choice), encoding="utf-8") as f:
             st.markdown(f.read())
+
+# ---------------------------------------------------------------------------
+# TAB 4 — Autonomous Investigation (same agent loop as agent.py CLI)
+# ---------------------------------------------------------------------------
+with tab4:
+    st.subheader("Autonomous Investigation")
+    st.caption("Agent reads evidence/ and chooses tools automatically.")
+
+    if st.button("Run autonomous investigation"):
+        try:
+            api_key = st.secrets["GROQ_API_KEY"]
+        except KeyError:
+            st.error("No GROQ_API_KEY found. Add it to .streamlit/secrets.toml and rerun.")
+        else:
+            with st.status("The Investigator is working…", expanded=True):
+                verdict = run_agent(
+                    "Investigate the incident in evidence/ and report what happened.",
+                    api_key=api_key,
+                    on_step=st.write,
+                )
+            st.markdown(verdict)
